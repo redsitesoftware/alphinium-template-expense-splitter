@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SplitEasy",
+    "slug": "expense-splitter",
+    "version": "1.0.0",
+    "backgroundColor": "#F0FDF4",
+    "primaryColor": "#16A34A",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "SplitEasy",
+      "description": "Split bills and collect money instantly",
+      "themeColor": "#16A34A",
+      "lang": "en"
+    },
+    "android": {
+      "package": "com.redsitesoftware.expenseSplitter"
+    },
+    "ios": {
+      "bundleIdentifier": "com.redsitesoftware.expenseSplitter"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "850680af-7433-41db-b067-15806ae2f4f2"
+      }
+    },
+    "owner": "zx10r06",
+    "description": "Split bills and collect money instantly"
+  }
+}
