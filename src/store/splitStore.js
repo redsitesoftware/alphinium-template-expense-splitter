@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useMemo, useReducer } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+
+const API_BASE = 'http://localhost:3001';
 
 const SplitContext = createContext(null);
 
@@ -173,6 +175,8 @@ const seededGroups = [
   },
 ];
 
+const MEMBER_COLORS = ['#6366F1', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9', '#F43F5E', '#8B5CF6', '#14B8A6'];
+
 const initialState = {
   phase: 'home',
   selectedGroup: null,
@@ -181,6 +185,7 @@ const initialState = {
   settleMode: false,
   groups: seededGroups,
   flashMessage: '',
+  apiLoaded: false,
 };
 
 function cents(value) {
@@ -462,6 +467,20 @@ function reducer(state, action) {
         ...state,
         flashMessage: '',
       };
+    case 'SET_GROUPS':
+      return {
+        ...state,
+        groups: action.groups,
+        apiLoaded: true,
+      };
+    case 'ADD_GROUP':
+      return {
+        ...state,
+        groups: [...state.groups, action.group],
+        phase: 'group',
+        selectedGroup: action.group.id,
+        flashMessage: `${action.group.name} created!`,
+      };
     default:
       return state;
   }
@@ -469,6 +488,24 @@ function reducer(state, action) {
 
 export function SplitProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+
+  useEffect(() => {
+    async function loadGroups() {
+      try {
+        const response = await fetch(`${API_BASE}/api/groups/me`, {
+          headers: { 'x-user-id': 'me' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          dispatch({ type: 'SET_GROUPS', groups: data });
+        }
+      } catch {
+        // Server unavailable — keep seeded groups as fallback
+      }
+    }
+    loadGroups();
+  }, []);
 
   const value = useMemo(() => {
     const groups = state.groups.map((group) => ({
@@ -513,6 +550,48 @@ export function SplitProvider({ children }) {
       addExpense: () => dispatch({ type: 'ADD_EXPENSE' }),
       setFlashMessage: (message) => dispatch({ type: 'SET_FLASH_MESSAGE', message }),
       clearFlashMessage: () => dispatch({ type: 'CLEAR_FLASH_MESSAGE' }),
+      createGroup: async (name, memberNames) => {
+        const members = [
+          { id: 'm1', name: 'You', initial: 'Y', color: MEMBER_COLORS[0] },
+          ...memberNames.map((memberName, index) => ({
+            id: `m_${Date.now()}_${index}`,
+            name: memberName.trim(),
+            initial: memberName.trim()[0]?.toUpperCase() || '?',
+            color: MEMBER_COLORS[(index + 1) % MEMBER_COLORS.length],
+          })),
+        ];
+        const newGroup = { id: `g_${Date.now()}`, name: name.trim(), members, expenses: [] };
+        try {
+          const response = await fetch(`${API_BASE}/api/groups`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': 'me' },
+            body: JSON.stringify({ name: newGroup.name, members }),
+          });
+          if (response.ok) {
+            const saved = await response.json();
+            dispatch({ type: 'ADD_GROUP', group: { ...newGroup, ...saved, expenses: saved.expenses || [] } });
+            return;
+          }
+        } catch {
+          // Server unavailable — add locally
+        }
+        dispatch({ type: 'ADD_GROUP', group: newGroup });
+      },
+      generateInviteLink: async (groupId) => {
+        try {
+          const response = await fetch(`${API_BASE}/api/groups/${groupId}/invite`, {
+            method: 'POST',
+            headers: { 'x-user-id': 'me' },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return data.inviteUrl || data.url || `${API_BASE}/join/${groupId}`;
+          }
+        } catch {
+          // Server unavailable — return fallback link
+        }
+        return `${API_BASE}/join/${groupId}`;
+      },
     };
   }, [state]);
 

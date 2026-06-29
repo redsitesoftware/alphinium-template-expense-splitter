@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSplitStore } from '../store/splitStore';
@@ -37,11 +40,15 @@ function ChatChip({ label, onPress }) {
 }
 
 export default function HomeScreen() {
-  const { groups, overall, openGroup, openSettle, openAddExpense, formatCurrency, formatSignedCurrency } = useSplitStore();
+  const { groups, overall, openGroup, openSettle, openAddExpense, formatCurrency, formatSignedCurrency, createGroup } = useSplitStore();
   const [chatOpen, setChatOpen] = useState(false);
   const [chatReply, setChatReply] = useState(
     "Hey! I'm Finn, your demo expense assistant — powered by ChatInstance + alphinium-payments. I track who owes what, send reminders, and handle settlements. Interested for your app?"
   );
+  const [newGroupVisible, setNewGroupVisible] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupMembers, setNewGroupMembers] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const baliTrip = groups.find((group) => group.id === 'g1');
   const baliSettlements = baliTrip?.summary.settlements || [];
@@ -61,6 +68,27 @@ export default function HomeScreen() {
     }),
     [baliTrip, formatCurrency, openAddExpense, openSettle]
   );
+
+  async function handleCreateGroup() {
+    const name = newGroupName.trim();
+    if (!name) {
+      Alert.alert('Group name required', 'Please enter a name for the group.');
+      return;
+    }
+    const memberNames = newGroupMembers
+      .split(',')
+      .map((m) => m.trim())
+      .filter((m) => m.length > 0);
+    setCreating(true);
+    try {
+      await createGroup(name, memberNames);
+      setNewGroupName('');
+      setNewGroupMembers('');
+      setNewGroupVisible(false);
+    } finally {
+      setCreating(false);
+    }
+  }
 
   return (
     <View style={styles.screen}>
@@ -98,7 +126,12 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Your groups</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Your groups</Text>
+          <Pressable style={styles.newGroupButton} onPress={() => setNewGroupVisible(true)}>
+            <Text style={styles.newGroupButtonText}>+ New Group</Text>
+          </Pressable>
+        </View>
         {groups.map((group) => (
           <Pressable key={group.id} style={styles.groupCard} onPress={() => openGroup(group.id)}>
             {group.image && (
@@ -154,6 +187,44 @@ export default function HomeScreen() {
           <Text style={styles.fabText}>Finn</Text>
         </Pressable>
       ) : null}
+
+      <Modal visible={newGroupVisible} animationType="slide" transparent onRequestClose={() => setNewGroupVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Group</Text>
+              <Pressable onPress={() => setNewGroupVisible(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.inputLabel}>Group name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Weekend Trip"
+              placeholderTextColor={colors.textMuted}
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              autoFocus
+            />
+            <Text style={styles.inputLabel}>Members (comma-separated)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Sarah, Marcus, Priya"
+              placeholderTextColor={colors.textMuted}
+              value={newGroupMembers}
+              onChangeText={setNewGroupMembers}
+            />
+            <Text style={styles.inputHint}>You are always included. Add other members by name.</Text>
+            <Pressable
+              style={[styles.primaryButton, creating && styles.primaryButtonDisabled]}
+              onPress={handleCreateGroup}
+              disabled={creating}
+            >
+              <Text style={styles.primaryButtonText}>{creating ? 'Creating…' : 'Create Group'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -262,6 +333,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: colors.text,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  newGroupButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  newGroupButtonText: {
+    color: colors.card,
+    fontWeight: '800',
+    fontSize: 14,
   },
   groupCard: {
     backgroundColor: colors.card,
@@ -407,5 +494,67 @@ const styles = StyleSheet.create({
   chatChipText: {
     color: colors.text,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  modalClose: {
+    fontSize: 20,
+    color: colors.textMuted,
+    paddingHorizontal: 4,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: -6,
+  },
+  input: {
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  inputHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: -6,
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.pill,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
+    color: colors.card,
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
