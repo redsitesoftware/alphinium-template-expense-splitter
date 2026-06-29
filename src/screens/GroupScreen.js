@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSplitStore } from '../store/splitStore';
@@ -21,10 +23,23 @@ export default function GroupScreen() {
     formatSignedCurrency,
     getSplitLabel,
     clearFlashMessage,
+    generateInviteLink,
   } = useSplitStore();
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
 
   if (!selectedGroup) {
     return null;
+  }
+
+  async function handleInvite() {
+    setInviteLoading(true);
+    try {
+      const url = await generateInviteLink(selectedGroup.id);
+      setInviteUrl(url);
+    } finally {
+      setInviteLoading(false);
+    }
   }
 
   const memberLookup = selectedGroup.members.reduce((acc, member) => {
@@ -66,6 +81,21 @@ export default function GroupScreen() {
             <Text style={styles.primaryButtonText}>Settle Up</Text>
           </Pressable>
         </View>
+        <Pressable style={styles.inviteButton} onPress={handleInvite} disabled={inviteLoading}>
+          <Text style={styles.inviteButtonText}>{inviteLoading ? 'Generating…' : '🔗 Invite Members'}</Text>
+        </Pressable>
+        {inviteUrl ? (
+          <View style={styles.inviteUrlBox}>
+            <Text style={styles.inviteUrlLabel}>Share this link:</Text>
+            <TextInput
+              style={styles.inviteUrlInput}
+              value={inviteUrl}
+              editable={false}
+              selectTextOnFocus
+              multiline={false}
+            />
+          </View>
+        ) : null}
       </View>
 
       {state.flashMessage ? (
@@ -331,5 +361,36 @@ const styles = StyleSheet.create({
   bottomButton: {
     marginTop: spacing.sm,
     flex: 0,
+  },
+  inviteButton: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: radii.pill,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inviteButtonText: {
+    color: colors.accent,
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  inviteUrlBox: {
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  inviteUrlLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  inviteUrlInput: {
+    color: colors.text,
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
