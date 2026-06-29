@@ -4,6 +4,14 @@ const API_BASE = 'http://localhost:3001';
 
 const SplitContext = createContext(null);
 
+const FALLBACK_CATEGORIES = [
+  { id: 'food', name: 'Food', emoji: '🍔' },
+  { id: 'transport', name: 'Transport', emoji: '🚗' },
+  { id: 'accommodation', name: 'Accommodation', emoji: '🏨' },
+  { id: 'entertainment', name: 'Entertainment', emoji: '🎉' },
+  { id: 'other', name: 'Other', emoji: '📦' },
+];
+
 const initialNewExpense = {
   description: '',
   amount: '',
@@ -11,6 +19,7 @@ const initialNewExpense = {
   splitWith: [],
   splitType: 'equal',
   customSplit: {},
+  category_id: null,
 };
 
 const seededGroups = [
@@ -186,6 +195,7 @@ const initialState = {
   groups: seededGroups,
   flashMessage: '',
   apiLoaded: false,
+  categories: FALLBACK_CATEGORIES,
 };
 
 function cents(value) {
@@ -363,6 +373,7 @@ function createExpenseFromDraft(group, draft) {
     splitType,
     splitWith,
     shares,
+    category_id: draft.category_id || null,
   };
 }
 
@@ -467,6 +478,11 @@ function reducer(state, action) {
         ...state,
         flashMessage: '',
       };
+    case 'SET_CATEGORIES':
+      return {
+        ...state,
+        categories: action.categories,
+      };
     case 'SET_GROUPS':
       return {
         ...state,
@@ -504,7 +520,22 @@ export function SplitProvider({ children }) {
         // Server unavailable — keep seeded groups as fallback
       }
     }
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_BASE}/api/categories`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          dispatch({ type: 'SET_CATEGORIES', categories: data });
+        }
+      } catch {
+        // Server unavailable — keep FALLBACK_CATEGORIES
+      }
+    }
+
     loadGroups();
+    loadCategories();
   }, []);
 
   const value = useMemo(() => {
@@ -534,6 +565,7 @@ export function SplitProvider({ children }) {
       groups,
       selectedGroup,
       overall,
+      categories: state.categories,
       dispatch,
       formatCurrency,
       formatSignedCurrency,

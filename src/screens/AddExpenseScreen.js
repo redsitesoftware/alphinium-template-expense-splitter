@@ -22,6 +22,7 @@ export default function AddExpenseScreen() {
   const {
     selectedGroup,
     state,
+    categories,
     goHome,
     openGroup,
     setAddExpenseStep,
@@ -99,6 +100,21 @@ export default function AddExpenseScreen() {
                 onPress={() => updateNewExpense({ paidBy: member.id })}
               />
             ))}
+          </View>
+
+          <Text style={styles.fieldLabel}>Category <Text style={styles.optionalLabel}>(optional)</Text></Text>
+          <View style={styles.pillWrap}>
+            {categories.map((cat) => {
+              const active = draft.category_id === cat.id;
+              return (
+                <OptionPill
+                  key={cat.id}
+                  active={active}
+                  label={`${cat.emoji} ${cat.name}`}
+                  onPress={() => updateNewExpense({ category_id: active ? null : cat.id })}
+                />
+              );
+            })}
           </View>
         </View>
       ) : null}
@@ -256,6 +272,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     color: colors.text,
     fontWeight: '700',
+  },
+  optionalLabel: {
+    color: colors.textMuted,
+    fontWeight: '400',
+    fontSize: 13,
   },
   input: {
     borderWidth: 1,

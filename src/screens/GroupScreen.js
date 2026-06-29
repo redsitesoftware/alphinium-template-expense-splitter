@@ -16,6 +16,7 @@ export default function GroupScreen() {
   const {
     selectedGroup,
     state,
+    categories,
     goHome,
     openAddExpense,
     openSettle,
@@ -44,6 +45,11 @@ export default function GroupScreen() {
 
   const memberLookup = selectedGroup.members.reduce((acc, member) => {
     acc[member.id] = member;
+    return acc;
+  }, {});
+
+  const categoryLookup = categories.reduce((acc, cat) => {
+    acc[cat.id] = cat;
     return acc;
   }, {});
 
@@ -108,7 +114,12 @@ export default function GroupScreen() {
       {selectedGroup.expenses.map((expense) => (
         <View key={expense.id} style={styles.expenseCard}>
           <View style={styles.expenseTopRow}>
-            <Text style={styles.expenseDesc}>{expense.desc}</Text>
+            <View style={styles.expenseDescRow}>
+              {expense.category_id && categoryLookup[expense.category_id] ? (
+                <Text style={styles.categoryEmoji}>{categoryLookup[expense.category_id].emoji}</Text>
+              ) : null}
+              <Text style={styles.expenseDesc}>{expense.desc}</Text>
+            </View>
             <Text style={styles.expenseAmount}>{formatCurrency(expense.amount)}</Text>
           </View>
           <Text style={styles.expenseMeta}>paid by {memberLookup[expense.paidBy]?.name || 'You'} · {expense.date}</Text>
@@ -291,6 +302,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: spacing.md,
+  },
+  expenseDescRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryEmoji: {
+    fontSize: 16,
   },
   expenseDesc: {
     flex: 1,
