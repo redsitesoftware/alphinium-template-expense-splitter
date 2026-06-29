@@ -31,6 +31,15 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://marketplace.alphinium.com/favicon.ico" />
 
+    <!-- Google Analytics — marketplace.alphinium.com (default, override via EXPO_PUBLIC_GA_ID) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=%EXPO_PUBLIC_GA_ID%"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '%EXPO_PUBLIC_GA_ID%');
+    </script>
+
     <style id="expo-reset">
       html, body { margin: 0; padding: 0; height: auto; }
       body { overflow-y: scroll; background-color: #F0FDF4; }

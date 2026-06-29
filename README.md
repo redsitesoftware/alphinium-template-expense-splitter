@@ -20,3 +20,11 @@ npm install --legacy-peer-deps
 npx expo install react-dom react-native-web @expo/metro-runtime
 CI=1 npx expo start --web --port 8100 --clear
 ```
+
+## Configuration
+
+| Variable | Description | Default | Notes |
+|---|---|---|---|
+| `EXPO_PUBLIC_GA_ID` | GA4 Measurement ID | `G-X09N3J8X17` | Override with your own GA property when going live |
+
+Copy `.env.example` to `.env` and set your own values as needed.
