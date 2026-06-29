@@ -8,7 +8,7 @@ RUN npx expo export --platform web --output-dir dist
 RUN node scripts/inject-ga.js
 
 # Final image: nginx:alpine + nodejs for Express API
-FROM nginx:alpine
+FROM mirror.gcr.io/library/nginx:alpine
 RUN apk add --no-cache nodejs npm
 
 WORKDIR /app
