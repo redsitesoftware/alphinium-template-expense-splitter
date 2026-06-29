@@ -81,6 +81,14 @@ function addMemberToGroup(groupId, member) {
   return group;
 }
 
+/**
+ * Reset all store data. Intended for use in tests only.
+ */
+function reset() {
+  groups.clear();
+  tokens.clear();
+}
+
 module.exports = {
   createGroup,
   getGroupsByUser,
@@ -88,4 +96,5 @@ module.exports = {
   createInviteToken,
   getGroupByToken,
   addMemberToGroup,
+  reset,
 };
