@@ -4,6 +4,8 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY . .
 RUN npx expo export --platform web --output-dir dist
+# Inject GA4 into the Metro-generated dist/index.html (Metro ignores web/index.html)
+RUN node scripts/inject-ga.js
 
 # Final image: nginx:alpine + nodejs for Express API
 FROM nginx:alpine
