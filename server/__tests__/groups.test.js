@@ -205,3 +205,213 @@ describe('GET /api/groups/join/:token', () => {
     expect(res.body.error).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/groups/:id/expenses
+// ---------------------------------------------------------------------------
+describe('POST /api/groups/:id/expenses', () => {
+  test('returns 400 when x-user-id header is missing', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .send({ amount: 50, description: 'Lunch', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/x-user-id/i);
+  });
+
+  test('returns 404 when group does not exist', async () => {
+    const res = await request(app)
+      .post('/api/groups/no-such-group/expenses')
+      .set('x-user-id', 'u1')
+      .send({ amount: 50, description: 'Lunch', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when amount is missing or non-positive', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 0, description: 'Lunch', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/amount/i);
+  });
+
+  test('returns 400 when description is empty or missing', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 50, description: '', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/description/i);
+  });
+
+  test('returns 400 when split_mode is invalid', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 50, description: 'Lunch', paid_by: 'u1', split_mode: 'random' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/split_mode/i);
+  });
+
+  test('returns 400 when split_mode is exact/percent but split_amounts is missing', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 50, description: 'Lunch', paid_by: 'u1', split_mode: 'percent' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/split_amounts/i);
+  });
+
+  test('returns 201 with equal split — auto-computes split_amounts for each member', async () => {
+    const group = store.createGroup('Trip', [
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: 'Bob' },
+    ]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 100, description: 'Dinner', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.split_mode).toBe('equal');
+    expect(res.body.split_amounts['u1']).toBe(50);
+    expect(res.body.split_amounts['u2']).toBe(50);
+  });
+
+  test('returns 201 with exact split — stores provided split_amounts as-is', async () => {
+    const group = store.createGroup('Trip', [
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: 'Bob' },
+    ]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({
+        amount: 90,
+        description: 'Hotel',
+        paid_by: 'u1',
+        split_mode: 'exact',
+        split_amounts: { u1: 60, u2: 30 },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.split_amounts).toEqual({ u1: 60, u2: 30 });
+  });
+
+  test('returns 201 with percent split — stores provided percentages', async () => {
+    const group = store.createGroup('Trip', [
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: 'Bob' },
+    ]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({
+        amount: 200,
+        description: 'Flights',
+        paid_by: 'u2',
+        split_mode: 'percent',
+        split_amounts: { u1: 70, u2: 30 },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.split_mode).toBe('percent');
+    expect(res.body.split_amounts).toEqual({ u1: 70, u2: 30 });
+  });
+
+  test('response contains id, createdAt, and all input fields', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 25, description: 'Coffee', paid_by: 'u1', split_mode: 'equal' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+    expect(res.body.createdAt).toBeDefined();
+    expect(res.body.amount).toBe(25);
+    expect(res.body.description).toBe('Coffee');
+    expect(res.body.paid_by).toBe('u1');
+    expect(res.body.split_mode).toBe('equal');
+    expect(res.body.groupId).toBe(group.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/groups/:id/expenses
+// ---------------------------------------------------------------------------
+describe('GET /api/groups/:id/expenses', () => {
+  test('returns 400 when x-user-id header is missing', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app).get(`/api/groups/${group.id}/expenses`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/x-user-id/i);
+  });
+
+  test('returns 404 when group does not exist', async () => {
+    const res = await request(app)
+      .get('/api/groups/no-such-group/expenses')
+      .set('x-user-id', 'u1');
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 200 with empty array for a new group', async () => {
+    const group = store.createGroup('Trip', [{ id: 'u1', name: 'Alice' }]);
+
+    const res = await request(app)
+      .get(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test('returns 200 with all expenses after POSTing multiple', async () => {
+    const group = store.createGroup('Trip', [
+      { id: 'u1', name: 'Alice' },
+      { id: 'u2', name: 'Bob' },
+    ]);
+
+    await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1')
+      .send({ amount: 40, description: 'Taxi', paid_by: 'u1', split_mode: 'equal' });
+
+    await request(app)
+      .post(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u2')
+      .send({ amount: 60, description: 'Groceries', paid_by: 'u2', split_mode: 'equal' });
+
+    const res = await request(app)
+      .get(`/api/groups/${group.id}/expenses`)
+      .set('x-user-id', 'u1');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].description).toBe('Taxi');
+    expect(res.body[1].description).toBe('Groceries');
+  });
+});
