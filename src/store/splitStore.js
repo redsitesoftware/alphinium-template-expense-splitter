@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 
-const API_BASE = 'http://localhost:3001';
+// Use relative URL so nginx proxies /api/ → http://127.0.0.1:3001 in the container.
+// In local dev the fetch calls fall back gracefully to seeded data via try/catch.
+const API_BASE = '';
 
 const SplitContext = createContext(null);
 
