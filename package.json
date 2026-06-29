@@ -2,14 +2,16 @@
   "name": "expense-splitter",
   "version": "1.0.0",
   "private": true,
-  "description": "SplitEasy \u2014 expense splitter demo app with Finn payments assistant",
+  "description": "SplitEasy — expense splitter demo app with Finn payments assistant",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web",
+    "server": "node server/index.js",
+    "test": "jest server/__tests__"
   },
   "keywords": [
     "react-native",
@@ -23,12 +25,15 @@
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",
     "expo": "~52.0.0",
+    "express": "^4.22.2",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "0.76.9",
     "react-native-web": "~0.19.13"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2"
+    "@babel/core": "^7.25.2",
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
   }
 }
