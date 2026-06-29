@@ -70,4 +70,49 @@ router.get('/join/:token', (req, res) => {
   });
 });
 
+// POST /api/groups/:id/expenses
+// Body: { description: string, amount: number, paid_by: string, category_id?: string }
+// Returns 201 with the expense object; 400 if unknown category_id
+router.post('/:id/expenses', (req, res) => {
+  const group = store.getGroupById(req.params.id);
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  const { description, amount, paid_by, category_id } = req.body;
+
+  if (!description || typeof description !== 'string' || !description.trim()) {
+    return res.status(400).json({ error: 'description is required' });
+  }
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  if (!paid_by || typeof paid_by !== 'string') {
+    return res.status(400).json({ error: 'paid_by is required' });
+  }
+  if (category_id !== undefined && !store.CATEGORY_IDS.has(category_id)) {
+    return res.status(400).json({ error: `Unknown category_id '${category_id}'. Valid values: ${[...store.CATEGORY_IDS].join(', ')}` });
+  }
+
+  const expense = store.addExpense(group.id, { description: description.trim(), amount, paid_by, category_id });
+  return res.status(201).json(expense);
+});
+
+// GET /api/groups/:id/summary?by=category
+// Returns total spend per category for a group
+router.get('/:id/summary', (req, res) => {
+  const group = store.getGroupById(req.params.id);
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  if (req.query.by === 'category') {
+    const summary = store.getGroupSummaryByCategory(group.id);
+    return res.status(200).json(summary);
+  }
+
+  return res.status(400).json({ error: "Unsupported summary type. Use ?by=category" });
+});
+
 module.exports = router;
+

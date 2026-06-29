@@ -1,5 +1,6 @@
 const express = require('express');
 const groupsRouter = require('./routes/groups');
+const categoriesRouter = require('./routes/categories');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,6 +19,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/groups', groupsRouter);
+app.use('/api/categories', categoriesRouter);
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
