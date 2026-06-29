@@ -66,6 +66,55 @@ function getGroupByToken(token) {
 }
 
 /**
+ * Add an expense to a group.
+ * For 'equal' split_mode, auto-distributes amount evenly across group members.
+ * For 'exact' and 'percent' modes, uses the caller-supplied split_amounts.
+ * @param {string} groupId
+ * @param {{ amount, description, paid_by, split_mode, split_amounts }} expense
+ * @returns {object|undefined} saved expense or undefined if group not found
+ */
+function addExpense(groupId, expense) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+
+  let split_amounts = expense.split_amounts || {};
+
+  if (expense.split_mode === 'equal') {
+    const memberCount = group.members.length || 1;
+    const share = Math.round((expense.amount / memberCount) * 100) / 100;
+    split_amounts = {};
+    group.members.forEach((member) => {
+      split_amounts[member.id] = share;
+    });
+  }
+
+  const saved = {
+    id: randomUUID(),
+    groupId,
+    amount: expense.amount,
+    description: expense.description,
+    paid_by: expense.paid_by,
+    split_mode: expense.split_mode,
+    split_amounts,
+    createdAt: new Date().toISOString(),
+  };
+
+  group.expenses.push(saved);
+  return saved;
+}
+
+/**
+ * Get all expenses for a group.
+ * @param {string} groupId
+ * @returns {Array|undefined} expenses array or undefined if group not found
+ */
+function getExpenses(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  return group.expenses;
+}
+
+/**
  * Add a member to an existing group.
  * @param {string} groupId
  * @param {{ id: string, name: string }} member
@@ -96,5 +145,7 @@ module.exports = {
   createInviteToken,
   getGroupByToken,
   addMemberToGroup,
+  addExpense,
+  getExpenses,
   reset,
 };
