@@ -70,4 +70,66 @@ router.get('/join/:token', (req, res) => {
   });
 });
 
+// POST /api/groups/:id/expenses
+// Header: x-user-id (required)
+// Body: { amount, description, paid_by, split_mode, split_amounts? }
+// Returns 201 with saved expense; 400/404 on validation errors
+router.post('/:id/expenses', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+
+  const group = store.getGroupById(req.params.id);
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  const { amount, description, paid_by, split_mode, split_amounts } = req.body;
+
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+  if (!description || typeof description !== 'string' || !description.trim()) {
+    return res.status(400).json({ error: 'description must be a non-empty string' });
+  }
+  if (!paid_by || typeof paid_by !== 'string') {
+    return res.status(400).json({ error: 'paid_by is required' });
+  }
+  const VALID_MODES = ['equal', 'exact', 'percent'];
+  if (!VALID_MODES.includes(split_mode)) {
+    return res.status(400).json({ error: `split_mode must be one of: ${VALID_MODES.join(', ')}` });
+  }
+  if ((split_mode === 'exact' || split_mode === 'percent') && (!split_amounts || typeof split_amounts !== 'object')) {
+    return res.status(400).json({ error: 'split_amounts is required for exact and percent modes' });
+  }
+
+  const expense = store.addExpense(req.params.id, {
+    amount,
+    description: description.trim(),
+    paid_by,
+    split_mode,
+    split_amounts: split_amounts || {},
+  });
+
+  return res.status(201).json(expense);
+});
+
+// GET /api/groups/:id/expenses
+// Header: x-user-id (required)
+// Returns 200 with expenses array; 400/404 on errors
+router.get('/:id/expenses', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+
+  const expenses = store.getExpenses(req.params.id);
+  if (expenses === undefined) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  return res.status(200).json(expenses);
+});
+
 module.exports = router;
