@@ -11,7 +11,8 @@
     "web": "expo start --web",
     "build": "expo export --platform web",
     "server": "node server/index.js",
-    "test": "jest server/__tests__"
+    "test": "jest server/__tests__",
+    "inject:ga": "node scripts/inject-ga.js"
   },
   "keywords": [
     "react-native",
