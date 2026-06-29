@@ -19,7 +19,8 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/groups', groupsRouter);
 
-// Health check
+// Health checks
+app.get('/', (req, res) => res.json({ status: 'ok' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 if (require.main === module) {
