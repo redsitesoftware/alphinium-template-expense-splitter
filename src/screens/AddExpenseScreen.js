@@ -513,6 +513,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   attachButton: {
+    flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radii.md,
@@ -524,6 +525,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     fontWeight: '500',
+    flexShrink: 1,
   },
   receiptThumbnail: {
     width: 64,

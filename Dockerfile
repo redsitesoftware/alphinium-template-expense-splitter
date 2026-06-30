@@ -13,9 +13,9 @@ RUN apk add --no-cache nodejs npm
 
 WORKDIR /app
 
-# Install only express (no Expo/RN native modules)
+# Install only express and multer (no Expo/RN native modules)
 COPY server ./server
-RUN npm install express
+RUN npm install express multer
 
 # Copy built frontend assets
 COPY --from=builder /app/dist /usr/share/nginx/html

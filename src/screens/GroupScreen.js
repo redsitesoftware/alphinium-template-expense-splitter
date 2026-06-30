@@ -425,6 +425,7 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 13,
     fontWeight: '500',
+    flexShrink: 1,
   },
   settlementCard: {
     backgroundColor: colors.card,
