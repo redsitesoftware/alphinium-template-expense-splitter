@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,8 +11,9 @@ import { useSplitStore } from '../store/splitStore';
 import { colors, radii, spacing } from '../theme';
 
 export default function SettleScreen() {
-  const { selectedGroup, openGroup, goHome, formatCurrency, setFlashMessage } = useSplitStore();
+  const { selectedGroup, openGroup, goHome, formatCurrency, recordSettlement } = useSplitStore();
   const [selectedMethod, setSelectedMethod] = useState('Request via Stripe');
+  const [confirming, setConfirming] = useState(false);
 
   const visibleSettlements = useMemo(() => {
     if (!selectedGroup) return [];
@@ -28,11 +30,29 @@ export default function SettleScreen() {
   }, {});
   const featured = visibleSettlements[0];
 
+  async function handleConfirmSettlement(settlement) {
+    if (!settlement) return;
+    setConfirming(true);
+    try {
+      const result = await recordSettlement(
+        selectedGroup.id,
+        settlement.from,
+        settlement.to,
+        settlement.amount
+      );
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Could not record settlement. Please try again.');
+      }
+      // On success, RECORD_SETTLEMENT dispatches navigate to group view with flash message
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   const sendReminder = () => {
     if (!featured) return;
     const from = memberLookup[featured.from];
-    setFlashMessage(`Reminder sent to ${from?.name} via ${selectedMethod}. Push notification simulated successfully.`);
-    openGroup(selectedGroup.id);
+    Alert.alert('Reminder sent', `Reminder sent to ${from?.name} via ${selectedMethod}.`);
   };
 
   return (
@@ -51,7 +71,7 @@ export default function SettleScreen() {
               ? `${memberLookup[featured.from]?.name} owes you ${formatCurrency(featured.amount)}`
               : `You owe ${memberLookup[featured.to]?.name} ${formatCurrency(featured.amount)}`}
           </Text>
-          <Text style={styles.helperText}>Choose a payment flow for the demo settlement.</Text>
+          <Text style={styles.helperText}>Choose a payment method and confirm to record the settlement.</Text>
         </View>
       ) : (
         <View style={styles.heroCard}>
@@ -85,13 +105,22 @@ export default function SettleScreen() {
                 ? `${from?.name} owes you ${formatCurrency(settlement.amount)}`
                 : `You owe ${to?.name} ${formatCurrency(settlement.amount)}`}
             </Text>
+            <Pressable
+              style={[styles.confirmButton, confirming && styles.confirmButtonDisabled]}
+              onPress={() => handleConfirmSettlement(settlement)}
+              disabled={confirming}
+            >
+              <Text style={styles.confirmButtonText}>{confirming ? 'Recording…' : '✓ Confirm Settlement'}</Text>
+            </Pressable>
           </View>
         );
       })}
 
-      <Pressable style={styles.primaryButton} onPress={sendReminder}>
-        <Text style={styles.primaryButtonText}>Send Reminder</Text>
-      </Pressable>
+      {featured ? (
+        <Pressable style={styles.primaryButton} onPress={sendReminder}>
+          <Text style={styles.primaryButtonText}>Send Reminder</Text>
+        </Pressable>
+      ) : null}
       <Pressable style={styles.lightButton} onPress={goHome}>
         <Text style={styles.lightButtonText}>Back Home</Text>
       </Pressable>
@@ -193,10 +222,25 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: spacing.sm,
   },
   settlementText: {
     color: colors.text,
     fontWeight: '700',
+  },
+  confirmButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  confirmButtonDisabled: {
+    opacity: 0.5,
+  },
+  confirmButtonText: {
+    color: colors.card,
+    fontWeight: '800',
+    fontSize: 14,
   },
   primaryButton: {
     backgroundColor: colors.primary,
