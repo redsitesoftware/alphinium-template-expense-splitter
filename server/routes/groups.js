@@ -132,6 +132,36 @@ router.get('/:id/expenses', (req, res) => {
   return res.status(200).json(expenses);
 });
 
+// POST /api/groups/:id/settlements
+// Body: { from: string, to: string, amount: number }
+// Header: x-user-id (required)
+// Returns 201 with the created settlement; 400/404 on errors
+router.post('/:id/settlements', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+
+  const { from, to, amount } = req.body;
+
+  if (!from || typeof from !== 'string') {
+    return res.status(400).json({ error: 'from is required' });
+  }
+  if (!to || typeof to !== 'string') {
+    return res.status(400).json({ error: 'to is required' });
+  }
+  if (typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a positive number' });
+  }
+
+  const settlement = store.addSettlement(req.params.id, { from, to, amount });
+  if (settlement === undefined) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  return res.status(201).json(settlement);
+});
+
 // GET /api/groups/:id/activity
 // Header: x-user-id (required)
 // Returns 200 with chronological unified event feed; 400/404 on errors

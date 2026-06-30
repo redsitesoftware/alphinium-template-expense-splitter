@@ -145,3 +145,77 @@ describe('store.getActivity', () => {
     expect(store.getActivity('nope')).toBeUndefined();
   });
 });
+
+describe('POST /api/groups/:id/settlements', () => {
+  it('returns 400 when x-user-id header is missing', async () => {
+    const group = store.createGroup('G', []);
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .send({ from: 'u1', to: 'u2', amount: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/x-user-id/i);
+  });
+
+  it('returns 400 when from is missing', async () => {
+    const group = store.createGroup('G', []);
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .set('x-user-id', 'u1')
+      .send({ to: 'u2', amount: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/from/i);
+  });
+
+  it('returns 400 when to is missing', async () => {
+    const group = store.createGroup('G', []);
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .set('x-user-id', 'u1')
+      .send({ from: 'u1', amount: 10 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/to/i);
+  });
+
+  it('returns 400 when amount is invalid', async () => {
+    const group = store.createGroup('G', []);
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .set('x-user-id', 'u1')
+      .send({ from: 'u1', to: 'u2', amount: -5 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/amount/i);
+  });
+
+  it('returns 404 when group does not exist', async () => {
+    const res = await request(app)
+      .post('/api/groups/nonexistent/settlements')
+      .set('x-user-id', 'u1')
+      .send({ from: 'u1', to: 'u2', amount: 10 });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 201 with created settlement', async () => {
+    const group = store.createGroup('G', [{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
+    const res = await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .set('x-user-id', 'u1')
+      .send({ from: 'u2', to: 'u1', amount: 25 });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ from: 'u2', to: 'u1', amount: 25 });
+    expect(res.body.id).toBeDefined();
+    expect(res.body.createdAt).toBeDefined();
+  });
+
+  it('settlement appears in activity feed after creation', async () => {
+    const group = store.createGroup('G', [{ id: 'u1', name: 'Alice' }]);
+    await request(app)
+      .post(`/api/groups/${group.id}/settlements`)
+      .set('x-user-id', 'u1')
+      .send({ from: 'u1', to: 'u1', amount: 10 });
+    const res = await request(app)
+      .get(`/api/groups/${group.id}/activity`)
+      .set('x-user-id', 'u1');
+    expect(res.status).toBe(200);
+    expect(res.body.some((e) => e.type === 'settlement')).toBe(true);
+  });
+});
