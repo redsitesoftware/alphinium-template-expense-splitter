@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -7,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSplitStore } from '../store/splitStore';
 import { colors, radii, spacing } from '../theme';
 
@@ -30,8 +33,71 @@ export default function AddExpenseScreen() {
     toggleSplitMember,
     updateCustomSplit,
     addExpense,
+    addExpenseAndUploadReceipt,
     formatCurrency,
   } = useSplitStore();
+
+  const [receiptUri, setReceiptUri] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleAttachReceipt() {
+    Alert.alert('Attach Receipt', 'Choose an option', [
+      {
+        text: 'Take Photo',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission denied', 'Camera access is required to take a photo.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
+          });
+          if (!result.canceled && result.assets?.[0]?.uri) {
+            setReceiptUri(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: 'Choose from Library',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission denied', 'Photo library access is required.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
+          });
+          if (!result.canceled && result.assets?.[0]?.uri) {
+            setReceiptUri(result.assets[0].uri);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  async function handleSubmitExpense() {
+    setUploading(true);
+    try {
+      const result = await addExpenseAndUploadReceipt(receiptUri);
+      if (receiptUri && result && !result.uploadSuccess) {
+        Alert.alert(
+          'Receipt not saved',
+          'Your expense was added, but the receipt photo could not be uploaded. You can try attaching it again later.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setUploading(false);
+      setReceiptUri(null);
+    }
+  }
 
   if (!selectedGroup) {
     return null;
@@ -200,8 +266,20 @@ export default function AddExpenseScreen() {
                 .join(', ')}
             </Text>
           </View>
-          <Pressable style={styles.primaryButton} onPress={addExpense}>
-            <Text style={styles.primaryButtonText}>Add Expense</Text>
+          <View style={styles.receiptSection}>
+            <Pressable style={styles.attachButton} onPress={handleAttachReceipt}>
+              <Text style={styles.attachButtonText}>📷 {receiptUri ? 'Change Receipt' : 'Attach Receipt'}</Text>
+            </Pressable>
+            {receiptUri ? (
+              <Image source={{ uri: receiptUri }} style={styles.receiptThumbnail} resizeMode="cover" />
+            ) : null}
+          </View>
+          <Pressable
+            style={[styles.primaryButton, uploading && styles.disabledButton]}
+            onPress={handleSubmitExpense}
+            disabled={uploading}
+          >
+            <Text style={styles.primaryButtonText}>{uploading ? 'Adding…' : 'Add Expense'}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -427,5 +505,33 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  receiptSection: {
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  attachButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+  },
+  attachButtonText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  receiptThumbnail: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

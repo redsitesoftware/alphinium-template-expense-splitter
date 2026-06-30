@@ -98,6 +98,7 @@ function addExpense(groupId, expense) {
     paid_by: expense.paid_by,
     split_mode: expense.split_mode,
     split_amounts,
+    receiptUrl: null,
     createdAt: new Date().toISOString(),
   };
 
@@ -130,6 +131,22 @@ function addMemberToGroup(groupId, member) {
     group.members.push({ ...member, joinedAt: new Date().toISOString() });
   }
   return group;
+}
+
+/**
+ * Set the receipt URL on an expense.
+ * @param {string} expenseId
+ * @param {string} groupId
+ * @param {string} url
+ * @returns {object|undefined} updated expense or undefined if not found
+ */
+function setExpenseReceipt(expenseId, groupId, url) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  const expense = group.expenses.find((e) => e.id === expenseId);
+  if (!expense) return undefined;
+  expense.receiptUrl = url;
+  return expense;
 }
 
 /**
@@ -301,6 +318,7 @@ module.exports = {
   addMemberToGroup,
   addExpense,
   getExpenses,
+  setExpenseReceipt,
   addSettlement,
   getActivity,
   reset,
