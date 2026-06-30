@@ -31,6 +31,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes
 app.use('/api/groups', groupsRouter);
 app.get('/api/categories', (req, res) => res.status(200).json(store.getCategories()));
+app.get('/api/fx-rates', async (req, res) => {
+  try {
+    const rates = await store.fetchFxRates();
+    return res.status(200).json(rates);
+  } catch {
+    return res.status(500).json({ error: 'Failed to fetch FX rates' });
+  }
+});
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

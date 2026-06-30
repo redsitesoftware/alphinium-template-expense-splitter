@@ -20,13 +20,13 @@ const upload = multer({
 // Body: { name: string, members: [{id, name}] }
 // Returns 201 with the created group object
 router.post('/', (req, res) => {
-  const { name, members } = req.body;
+  const { name, members, baseCurrency } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'name is required and must be a non-empty string' });
   }
 
-  const group = store.createGroup(name.trim(), members || []);
+  const group = store.createGroup(name.trim(), members || [], baseCurrency);
   return res.status(201).json(group);
 });
 
@@ -98,7 +98,7 @@ router.post('/:id/expenses', (req, res) => {
     return res.status(404).json({ error: 'Group not found' });
   }
 
-  const { amount, description, paid_by, split_mode, split_amounts, category_id } = req.body;
+  const { amount, description, paid_by, split_mode, split_amounts, category_id, currency } = req.body;
 
   if (typeof amount !== 'number' || amount <= 0) {
     return res.status(400).json({ error: 'amount must be a positive number' });
@@ -127,6 +127,7 @@ router.post('/:id/expenses', (req, res) => {
     split_mode,
     split_amounts: split_amounts || {},
     category_id: category_id || null,
+    currency: currency || null,
   });
 
   return res.status(201).json(expense);

@@ -4,13 +4,46 @@ const { randomUUID } = require('crypto');
 const groups = new Map();
 const tokens = new Map();
 
+// ── FX Rate Cache ─────────────────────────────────────────────────────────────
+let _fxCache = { base: 'USD', rates: {}, updatedAt: 0 };
+const FX_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Fetch (or return cached) FX rates from open.er-api.com.
+ * Falls back to an empty rates object (1:1) if the request fails.
+ * @returns {{ base: string, rates: object, updatedAt: number }}
+ */
+async function fetchFxRates() {
+  const now = Date.now();
+  if (_fxCache.updatedAt && now - _fxCache.updatedAt < FX_CACHE_TTL) {
+    return _fxCache;
+  }
+  try {
+    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    _fxCache = { base: 'USD', rates: data.rates || {}, updatedAt: now };
+  } catch {
+    if (!_fxCache.updatedAt) {
+      _fxCache = { base: 'USD', rates: {}, updatedAt: now };
+    }
+  }
+  return _fxCache;
+}
+
+/** @internal — for test use only */
+function _setFxCache(cache) {
+  _fxCache = cache;
+}
+
 /**
  * Create a new group.
  * @param {string} name
  * @param {Array<{id: string, name: string}>} members
+ * @param {string} [baseCurrency='USD']
  * @returns {{ id: string, name: string, members: Array, expenses: Array, createdAt: string }}
  */
-function createGroup(name, members) {
+function createGroup(name, members, baseCurrency) {
   const now = new Date().toISOString();
   const group = {
     id: randomUUID(),
@@ -18,6 +51,7 @@ function createGroup(name, members) {
     members: (members || []).map((m) => ({ ...m, joinedAt: now })),
     expenses: [],
     settlements: [],
+    baseCurrency: (typeof baseCurrency === 'string' && baseCurrency.trim()) ? baseCurrency.trim().toUpperCase() : 'USD',
     createdAt: now,
   };
   groups.set(group.id, group);
@@ -71,8 +105,9 @@ function getGroupByToken(token) {
  * Add an expense to a group.
  * For 'equal' split_mode, auto-distributes amount evenly across group members.
  * For 'exact' and 'percent' modes, uses the caller-supplied split_amounts.
+ * Stores the original currency and convertedAmount (in group's baseCurrency).
  * @param {string} groupId
- * @param {{ amount, description, paid_by, split_mode, split_amounts }} expense
+ * @param {{ amount, description, paid_by, split_mode, split_amounts, currency?, category_id? }} expense
  * @returns {object|undefined} saved expense or undefined if group not found
  */
 function addExpense(groupId, expense) {
@@ -90,6 +125,19 @@ function addExpense(groupId, expense) {
     });
   }
 
+  const currency = (expense.currency || group.baseCurrency || 'USD').toUpperCase();
+  const baseCurrency = (group.baseCurrency || 'USD').toUpperCase();
+
+  let convertedAmount = expense.amount;
+  if (currency !== baseCurrency) {
+    const rates = _fxCache.rates;
+    // Rates are USD-based: rates[X] = units of X per 1 USD
+    // To convert: amount_currency → USD → baseCurrency
+    const toUSD = currency === 'USD' ? 1 : (rates[currency] ? 1 / rates[currency] : 1);
+    const fromUSD = baseCurrency === 'USD' ? 1 : (rates[baseCurrency] || 1);
+    convertedAmount = Math.round(expense.amount * toUSD * fromUSD * 100) / 100;
+  }
+
   const saved = {
     id: randomUUID(),
     groupId,
@@ -99,6 +147,9 @@ function addExpense(groupId, expense) {
     split_mode: expense.split_mode,
     split_amounts,
     category_id: expense.category_id || null,
+    currency,
+    originalAmount: currency !== baseCurrency ? expense.amount : null,
+    convertedAmount,
     receiptUrl: null,
     createdAt: new Date().toISOString(),
   };
@@ -257,9 +308,12 @@ function getBalances(groupId) {
   const net = {};
   group.members.forEach((m) => { net[m.id] = 0; });
   group.expenses.forEach((expense) => {
-    net[expense.paid_by] = round2((net[expense.paid_by] || 0) + expense.amount);
+    const amount = expense.convertedAmount ?? expense.amount;
+    // Scale split_amounts by the same conversion ratio so debts balance correctly
+    const scaleFactor = expense.amount > 0 ? amount / expense.amount : 1;
+    net[expense.paid_by] = round2((net[expense.paid_by] || 0) + amount);
     Object.entries(expense.split_amounts || {}).forEach(([memberId, share]) => {
-      net[memberId] = round2((net[memberId] || 0) - share);
+      net[memberId] = round2((net[memberId] || 0) - round2(share * scaleFactor));
     });
   });
 
@@ -310,6 +364,7 @@ function seedDemoData() {
   groups.set('g1', {
     id: 'g1',
     name: 'Bali Trip',
+    baseCurrency: 'USD',
     members: [
       { id: 'm1', name: 'You', joinedAt: ts(10) },
       { id: 'm2', name: 'Sarah', joinedAt: ts(10) },
@@ -333,6 +388,7 @@ function seedDemoData() {
   groups.set('g2', {
     id: 'g2',
     name: 'Flat Share - June',
+    baseCurrency: 'USD',
     members: [
       { id: 'm1', name: 'You', joinedAt: ts(14) },
       { id: 'm5', name: 'James', joinedAt: ts(14) },
@@ -354,6 +410,7 @@ function seedDemoData() {
   groups.set('g3', {
     id: 'g3',
     name: "Tom's Birthday Dinner",
+    baseCurrency: 'USD',
     members: [
       { id: 'm1', name: 'You', joinedAt: ts(7) },
       { id: 'm7', name: 'Tom', joinedAt: ts(7) },
@@ -394,5 +451,7 @@ module.exports = {
   isValidCategoryId,
   getCategorySummary,
   getBalances,
+  fetchFxRates,
+  _setFxCache,
   reset,
 };

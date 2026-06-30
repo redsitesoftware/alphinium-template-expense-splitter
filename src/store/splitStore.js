@@ -20,12 +20,14 @@ const initialNewExpense = {
   splitType: 'equal',
   customSplit: {},
   category_id: null,
+  currency: 'USD',
 };
 
 const seededGroups = [
   {
     id: 'g1',
     name: 'Bali Trip',
+    baseCurrency: 'USD',
     image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800&q=80',
     members: [
       { id: 'm1', name: 'You', initial: 'Y', color: '#6366F1' },
@@ -89,6 +91,7 @@ const seededGroups = [
   {
     id: 'g2',
     name: 'Flat Share - June',
+    baseCurrency: 'USD',
     image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80',
     members: [
       { id: 'm1', name: 'You', initial: 'Y', color: '#6366F1' },
@@ -141,6 +144,7 @@ const seededGroups = [
   {
     id: 'g3',
     name: "Tom's Birthday Dinner",
+    baseCurrency: 'USD',
     image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=80',
     members: [
       { id: 'm1', name: 'You', initial: 'Y', color: '#6366F1' },
@@ -196,6 +200,8 @@ const initialState = {
   flashMessage: '',
   apiLoaded: false,
   categories: FALLBACK_CATEGORIES,
+  fxRates: null,
+  fxBase: 'USD',
 };
 
 function cents(value) {
@@ -374,6 +380,7 @@ function createExpenseFromDraft(group, draft) {
     splitWith,
     shares,
     category_id: draft.category_id || null,
+    currency: draft.currency || 'USD',
   };
 }
 
@@ -395,7 +402,8 @@ function reducer(state, action) {
         addExpenseStep: 0,
         newExpense: initialNewExpense,
       };
-    case 'OPEN_ADD_EXPENSE':
+    case 'OPEN_ADD_EXPENSE': {
+      const targetGroup = state.groups.find((g) => g.id === action.groupId);
       return {
         ...state,
         phase: 'add-expense',
@@ -405,8 +413,10 @@ function reducer(state, action) {
         newExpense: {
           ...initialNewExpense,
           splitWith: action.memberIds || [],
+          currency: targetGroup?.baseCurrency || 'USD',
         },
       };
+    }
     case 'OPEN_SETTLE':
       return {
         ...state,
@@ -492,6 +502,12 @@ function reducer(state, action) {
         ...state,
         flashMessage: '',
       };
+    case 'SET_FX_RATES':
+      return {
+        ...state,
+        fxRates: action.rates,
+        fxBase: action.base || 'USD',
+      };
     case 'SET_CATEGORIES':
       return {
         ...state,
@@ -548,8 +564,22 @@ export function SplitProvider({ children }) {
       }
     }
 
+    async function loadFxRates() {
+      try {
+        const response = await fetch(`${API_BASE}/api/fx-rates`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (data.rates && typeof data.rates === 'object') {
+          dispatch({ type: 'SET_FX_RATES', rates: data.rates, base: data.base || 'USD' });
+        }
+      } catch {
+        // Server unavailable — components use raw amounts without conversion
+      }
+    }
+
     loadGroups();
     loadCategories();
+    loadFxRates();
   }, []);
 
   const value = useMemo(() => {
@@ -580,6 +610,8 @@ export function SplitProvider({ children }) {
       selectedGroup,
       overall,
       categories: state.categories,
+      fxRates: state.fxRates,
+      fxBase: state.fxBase,
       dispatch,
       formatCurrency,
       formatSignedCurrency,
@@ -595,12 +627,38 @@ export function SplitProvider({ children }) {
       updateCustomSplit: (memberId, value) => dispatch({ type: 'UPDATE_CUSTOM_SPLIT', memberId, value }),
       addExpense: () => dispatch({ type: 'ADD_EXPENSE' }),
       addExpenseAndUploadReceipt: async (receiptUri) => {
-        // Build expense synchronously so we know its ID before dispatch
         const group = state.groups.find((item) => item.id === state.selectedGroup);
         if (!group) return { uploadSuccess: true };
-        const expense = createExpenseFromDraft(group, state.newExpense);
+        const localExpense = createExpenseFromDraft(group, state.newExpense);
         dispatch({ type: 'ADD_EXPENSE' });
+
+        // Try posting expense to server; use server ID for receipt upload if successful
+        let serverExpenseId = null;
+        try {
+          const splitModeMap = { equal: 'equal', amount: 'exact', '%': 'percent' };
+          const serverRes = await fetch(`${API_BASE}/api/groups/${group.id}/expenses`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': 'me' },
+            body: JSON.stringify({
+              amount: localExpense.amount,
+              description: localExpense.desc,
+              paid_by: localExpense.paidBy,
+              split_mode: splitModeMap[localExpense.splitType] || 'equal',
+              split_amounts: localExpense.splitType !== 'equal' ? localExpense.shares : undefined,
+              category_id: localExpense.category_id || undefined,
+              currency: localExpense.currency,
+            }),
+          });
+          if (serverRes.ok) {
+            const saved = await serverRes.json();
+            serverExpenseId = saved.id;
+          }
+        } catch {
+          // Server unavailable — continue with local-only expense
+        }
+
         if (!receiptUri) return { uploadSuccess: true };
+        const expenseId = serverExpenseId || localExpense.id;
         try {
           const formData = new FormData();
           const filename = receiptUri.split('/').pop() || 'receipt.jpg';
@@ -608,7 +666,7 @@ export function SplitProvider({ children }) {
           const type = match ? `image/${match[1]}` : 'image/jpeg';
           formData.append('receipt', { uri: receiptUri, name: filename, type });
           const res = await fetch(
-            `${API_BASE}/api/groups/${group.id}/expenses/${expense.id}/receipt`,
+            `${API_BASE}/api/groups/${group.id}/expenses/${expenseId}/receipt`,
             {
               method: 'POST',
               headers: { 'x-user-id': 'me' },
@@ -621,7 +679,7 @@ export function SplitProvider({ children }) {
               dispatch({
                 type: 'SET_EXPENSE_RECEIPT_URL',
                 groupId: group.id,
-                expenseId: expense.id,
+                expenseId: localExpense.id,
                 receiptUrl: data.receiptUrl,
               });
             }
