@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = '';
 
 const SplitContext = createContext(null);
 
