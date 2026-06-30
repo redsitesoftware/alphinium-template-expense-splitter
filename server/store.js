@@ -98,6 +98,7 @@ function addExpense(groupId, expense) {
     paid_by: expense.paid_by,
     split_mode: expense.split_mode,
     split_amounts,
+    category_id: expense.category_id || null,
     receiptUrl: null,
     createdAt: new Date().toISOString(),
   };
@@ -217,6 +218,74 @@ function getActivity(groupId) {
   return events;
 }
 
+// ── Categories ────────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { id: 'food',          name: 'Food & Drink',    emoji: '🍔' },
+  { id: 'transport',     name: 'Transport',        emoji: '🚗' },
+  { id: 'accommodation', name: 'Accommodation',    emoji: '🏨' },
+  { id: 'activities',    name: 'Activities',       emoji: '🎉' },
+  { id: 'other',         name: 'Other',            emoji: '📦' },
+];
+const CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));
+
+function getCategories() {
+  return CATEGORIES;
+}
+
+function isValidCategoryId(id) {
+  return CATEGORY_IDS.has(id);
+}
+
+function getCategorySummary(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  const totals = {};
+  for (const expense of group.expenses) {
+    const key = expense.category_id || 'other';
+    totals[key] = Math.round(((totals[key] || 0) + expense.amount) * 100) / 100;
+  }
+  return totals;
+}
+
+// ── Balances ──────────────────────────────────────────────────────────────────
+function round2(n) { return Math.round(n * 100) / 100; }
+
+function getBalances(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+
+  const net = {};
+  group.members.forEach((m) => { net[m.id] = 0; });
+  group.expenses.forEach((expense) => {
+    net[expense.paid_by] = round2((net[expense.paid_by] || 0) + expense.amount);
+    Object.entries(expense.split_amounts || {}).forEach(([memberId, share]) => {
+      net[memberId] = round2((net[memberId] || 0) - share);
+    });
+  });
+
+  const creditors = Object.entries(net)
+    .filter(([, v]) => v > 0.009)
+    .map(([id, amount]) => ({ id, amount: round2(amount) }))
+    .sort((a, b) => b.amount - a.amount);
+  const debtors = Object.entries(net)
+    .filter(([, v]) => v < -0.009)
+    .map(([id, amount]) => ({ id, amount: round2(-amount) }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const settlements = [];
+  let ci = 0; let di = 0;
+  while (ci < creditors.length && di < debtors.length) {
+    const amount = round2(Math.min(creditors[ci].amount, debtors[di].amount));
+    settlements.push({ from: debtors[di].id, to: creditors[ci].id, amount });
+    creditors[ci].amount = round2(creditors[ci].amount - amount);
+    debtors[di].amount = round2(debtors[di].amount - amount);
+    if (creditors[ci].amount < 0.009) ci++;
+    if (debtors[di].amount < 0.009) di++;
+  }
+
+  return { net, settlements };
+}
+
 /**
  * Reset all store data. Intended for use in tests only.
  */
@@ -321,5 +390,9 @@ module.exports = {
   setExpenseReceipt,
   addSettlement,
   getActivity,
+  getCategories,
+  isValidCategoryId,
+  getCategorySummary,
+  getBalances,
   reset,
 };

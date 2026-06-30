@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const groupsRouter = require('./routes/groups');
+const store = require('./store');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +30,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/groups', groupsRouter);
+app.get('/api/categories', (req, res) => res.status(200).json(store.getCategories()));
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

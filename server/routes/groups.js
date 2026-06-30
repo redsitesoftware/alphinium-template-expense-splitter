@@ -98,7 +98,7 @@ router.post('/:id/expenses', (req, res) => {
     return res.status(404).json({ error: 'Group not found' });
   }
 
-  const { amount, description, paid_by, split_mode, split_amounts } = req.body;
+  const { amount, description, paid_by, split_mode, split_amounts, category_id } = req.body;
 
   if (typeof amount !== 'number' || amount <= 0) {
     return res.status(400).json({ error: 'amount must be a positive number' });
@@ -116,6 +116,9 @@ router.post('/:id/expenses', (req, res) => {
   if ((split_mode === 'exact' || split_mode === 'percent') && (!split_amounts || typeof split_amounts !== 'object')) {
     return res.status(400).json({ error: 'split_amounts is required for exact and percent modes' });
   }
+  if (category_id !== undefined && !store.isValidCategoryId(category_id)) {
+    return res.status(400).json({ error: `category_id must be one of: ${['food','transport','accommodation','activities','other'].join(', ')}` });
+  }
 
   const expense = store.addExpense(req.params.id, {
     amount,
@@ -123,6 +126,7 @@ router.post('/:id/expenses', (req, res) => {
     paid_by,
     split_mode,
     split_amounts: split_amounts || {},
+    category_id: category_id || null,
   });
 
   return res.status(201).json(expense);
@@ -246,5 +250,62 @@ router.post('/:groupId/expenses/:expenseId/receipt',
     return res.status(200).json({ receiptUrl });
   }
 );
+
+// GET /api/groups/:id/balances
+// Returns net balances per member and optimal settle-up list
+router.get('/:id/balances', (req, res) => {
+  if (!req.headers['x-user-id']) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+  const result = store.getBalances(req.params.id);
+  if (result === undefined) return res.status(404).json({ error: 'Group not found' });
+  return res.status(200).json(result);
+});
+
+// GET /api/groups/:id/export?format=csv[&from=ISO&to=ISO]
+// Returns CSV of expenses with optional date range filter
+router.get('/:id/export', (req, res) => {
+  if (!req.headers['x-user-id']) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+  if (req.query.format !== 'csv') {
+    return res.status(400).json({ error: "format query param must be 'csv'" });
+  }
+  const group = store.getGroupById(req.params.id);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  let expenses = group.expenses;
+  if (req.query.from) {
+    const from = new Date(req.query.from);
+    expenses = expenses.filter((e) => new Date(e.createdAt) >= from);
+  }
+  if (req.query.to) {
+    const to = new Date(req.query.to);
+    expenses = expenses.filter((e) => new Date(e.createdAt) <= to);
+  }
+
+  const rows = ['date,description,amount,paid_by,split_mode,split_details'];
+  for (const e of expenses) {
+    const splitDetails = Object.entries(e.split_amounts || {}).map(([k, v]) => `${k}:${v}`).join(' ');
+    rows.push(`${e.createdAt},${e.description},${e.amount},${e.paid_by},${e.split_mode},"${splitDetails}"`);
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="expenses-${req.params.id}.csv"`);
+  return res.status(200).send(rows.join('\n'));
+});
+
+// GET /api/groups/:id/summary?by=category
+router.get('/:id/summary', (req, res) => {
+  if (!req.headers['x-user-id']) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+  if (req.query.by !== 'category') {
+    return res.status(400).json({ error: "by query param must be 'category'" });
+  }
+  const totals = store.getCategorySummary(req.params.id);
+  if (totals === undefined) return res.status(404).json({ error: 'Group not found' });
+  return res.status(200).json(totals);
+});
 
 module.exports = router;
