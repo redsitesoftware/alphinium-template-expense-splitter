@@ -482,6 +482,28 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'RECORD_SETTLEMENT': {
+      const group = state.groups.find((item) => item.id === action.groupId);
+      if (!group) return state;
+      const settlement = {
+        id: `s${Date.now()}`,
+        groupId: action.groupId,
+        from: action.from,
+        to: action.to,
+        amount: action.amount,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        ...state,
+        phase: 'group',
+        settleMode: false,
+        flashMessage: 'Settlement recorded',
+        groups: state.groups.map((item) => {
+          if (item.id !== action.groupId) return item;
+          return { ...item, settlements: [...(item.settlements || []), settlement] };
+        }),
+      };
+    }
     case 'SET_FLASH_MESSAGE':
       return {
         ...state,
@@ -675,6 +697,23 @@ export function SplitProvider({ children }) {
           // Server unavailable — return fallback link
         }
         return `${API_BASE}/join/${groupId}`;
+      },
+      recordSettlement: async (groupId, from, to, amount) => {
+        try {
+          const res = await fetch(`${API_BASE}/api/groups/${groupId}/settlements`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': 'me' },
+            body: JSON.stringify({ from, to, amount }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            return { success: false, error: err.error || `HTTP ${res.status}` };
+          }
+        } catch {
+          // Server unavailable — record locally only
+        }
+        dispatch({ type: 'RECORD_SETTLEMENT', groupId, from, to, amount });
+        return { success: true };
       },
     };
   }, [state]);

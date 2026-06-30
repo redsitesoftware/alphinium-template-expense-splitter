@@ -172,6 +172,17 @@ function addSettlement(groupId, { from, to, amount }) {
 }
 
 /**
+ * Get all settlements for a group.
+ * @param {string} groupId
+ * @returns {Array|undefined} settlements array or undefined if group not found
+ */
+function getSettlements(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  return group.settlements;
+}
+
+/**
  * Get a unified chronological activity feed for a group.
  * Merges expenses, settlements, and member join events sorted by createdAt ascending.
  * @param {string} groupId
@@ -389,6 +400,7 @@ module.exports = {
   getExpenses,
   setExpenseReceipt,
   addSettlement,
+  getSettlements,
   getActivity,
   getCategories,
   isValidCategoryId,

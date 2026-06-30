@@ -179,6 +179,20 @@ router.post('/:id/settlements', (req, res) => {
   return res.status(201).json(settlement);
 });
 
+// GET /api/groups/:id/settlements
+// Header: x-user-id (required)
+// Returns 200 with settlements array; 404 if group not found
+router.get('/:id/settlements', (req, res) => {
+  if (!req.headers['x-user-id']) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+  const settlements = store.getSettlements(req.params.id);
+  if (settlements === undefined) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  return res.status(200).json(settlements);
+});
+
 // GET /api/groups/:id/activity
 // Header: x-user-id (required)
 // Returns 200 with chronological unified event feed; 400/404 on errors
