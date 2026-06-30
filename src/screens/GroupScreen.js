@@ -177,17 +177,19 @@ export default function GroupScreen() {
         <Text style={styles.emptyText}>No activity yet</Text>
       ) : (
         activityEvents.map((event, index) => {
+          const actorName = memberLookup[event.actor]?.name || event.actor;
+          const toName = memberLookup[event.to]?.name || event.to;
           let label = '';
           if (event.type === 'expense') {
-            label = `${event.actor} paid ${formatCurrency(event.amount)} for ${event.description}`;
+            label = `${actorName} paid ${formatCurrency(event.amount)} for ${event.description}`;
           } else if (event.type === 'settlement') {
-            label = `${event.actor} paid ${event.to} ${formatCurrency(event.amount)}`;
+            label = `${actorName} paid ${toName} ${formatCurrency(event.amount)}`;
           } else if (event.type === 'member_joined') {
             label = `${event.name} joined the group`;
           } else {
             label = event.description || event.type;
           }
-          const ts = event.timestamp ? new Date(event.timestamp).toLocaleString() : '';
+          const ts = event.createdAt ? new Date(event.createdAt).toLocaleString() : '';
           return (
             <View key={event.id || index} style={styles.activityRow}>
               <Text style={styles.activityLabel}>{label}</Text>
