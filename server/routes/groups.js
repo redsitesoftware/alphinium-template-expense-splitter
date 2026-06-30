@@ -132,4 +132,21 @@ router.get('/:id/expenses', (req, res) => {
   return res.status(200).json(expenses);
 });
 
+// GET /api/groups/:id/activity
+// Header: x-user-id (required)
+// Returns 200 with chronological unified event feed; 400/404 on errors
+router.get('/:id/activity', (req, res) => {
+  const userId = req.headers['x-user-id'];
+  if (!userId) {
+    return res.status(400).json({ error: 'x-user-id header is required' });
+  }
+
+  const events = store.getActivity(req.params.id);
+  if (events === undefined) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  return res.status(200).json(events);
+});
+
 module.exports = router;

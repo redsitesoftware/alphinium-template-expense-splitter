@@ -11,12 +11,14 @@ const tokens = new Map();
  * @returns {{ id: string, name: string, members: Array, expenses: Array, createdAt: string }}
  */
 function createGroup(name, members) {
+  const now = new Date().toISOString();
   const group = {
     id: randomUUID(),
     name,
-    members: members || [],
+    members: (members || []).map((m) => ({ ...m, joinedAt: now })),
     expenses: [],
-    createdAt: new Date().toISOString(),
+    settlements: [],
+    createdAt: now,
   };
   groups.set(group.id, group);
   return group;
@@ -125,9 +127,77 @@ function addMemberToGroup(groupId, member) {
   if (!group) return undefined;
   const already = group.members.some((m) => m.id === member.id);
   if (!already) {
-    group.members.push(member);
+    group.members.push({ ...member, joinedAt: new Date().toISOString() });
   }
   return group;
+}
+
+/**
+ * Add a settlement to a group.
+ * @param {string} groupId
+ * @param {{ from: string, to: string, amount: number }} settlement
+ * @returns {object|undefined} saved settlement or undefined if group not found
+ */
+function addSettlement(groupId, { from, to, amount }) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  const saved = {
+    id: randomUUID(),
+    groupId,
+    from,
+    to,
+    amount,
+    createdAt: new Date().toISOString(),
+  };
+  group.settlements.push(saved);
+  return saved;
+}
+
+/**
+ * Get a unified chronological activity feed for a group.
+ * Merges expenses, settlements, and member join events sorted by createdAt ascending.
+ * @param {string} groupId
+ * @returns {Array|undefined} sorted events or undefined if group not found
+ */
+function getActivity(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+
+  const events = [];
+
+  for (const expense of group.expenses) {
+    events.push({
+      type: 'expense',
+      id: expense.id,
+      actor: expense.paid_by,
+      amount: expense.amount,
+      description: expense.description,
+      createdAt: expense.createdAt,
+    });
+  }
+
+  for (const settlement of (group.settlements || [])) {
+    events.push({
+      type: 'settlement',
+      id: settlement.id,
+      actor: settlement.from,
+      to: settlement.to,
+      amount: settlement.amount,
+      createdAt: settlement.createdAt,
+    });
+  }
+
+  for (const member of group.members) {
+    events.push({
+      type: 'member_joined',
+      actor: member.id,
+      name: member.name,
+      createdAt: member.joinedAt || group.createdAt,
+    });
+  }
+
+  events.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return events;
 }
 
 /**
@@ -147,5 +217,7 @@ module.exports = {
   addMemberToGroup,
   addExpense,
   getExpenses,
+  addSettlement,
+  getActivity,
   reset,
 };
