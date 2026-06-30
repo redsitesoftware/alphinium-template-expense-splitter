@@ -468,6 +468,20 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'SET_EXPENSE_RECEIPT_URL': {
+      return {
+        ...state,
+        groups: state.groups.map((item) => {
+          if (item.id !== action.groupId) return item;
+          return {
+            ...item,
+            expenses: item.expenses.map((exp) =>
+              exp.id === action.expenseId ? { ...exp, receiptUrl: action.receiptUrl } : exp
+            ),
+          };
+        }),
+      };
+    }
     case 'SET_FLASH_MESSAGE':
       return {
         ...state,
@@ -580,6 +594,42 @@ export function SplitProvider({ children }) {
       toggleSplitMember: (memberId) => dispatch({ type: 'TOGGLE_SPLIT_MEMBER', memberId }),
       updateCustomSplit: (memberId, value) => dispatch({ type: 'UPDATE_CUSTOM_SPLIT', memberId, value }),
       addExpense: () => dispatch({ type: 'ADD_EXPENSE' }),
+      addExpenseAndUploadReceipt: async (receiptUri) => {
+        // Build expense synchronously so we know its ID before dispatch
+        const group = state.groups.find((item) => item.id === state.selectedGroup);
+        if (!group) return;
+        const expense = createExpenseFromDraft(group, state.newExpense);
+        dispatch({ type: 'ADD_EXPENSE' });
+        if (!receiptUri) return;
+        try {
+          const formData = new FormData();
+          const filename = receiptUri.split('/').pop() || 'receipt.jpg';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : 'image/jpeg';
+          formData.append('receipt', { uri: receiptUri, name: filename, type });
+          const res = await fetch(
+            `${API_BASE}/api/groups/${group.id}/expenses/${expense.id}/receipt`,
+            {
+              method: 'POST',
+              headers: { 'x-user-id': 'me' },
+              body: formData,
+            }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.receiptUrl) {
+              dispatch({
+                type: 'SET_EXPENSE_RECEIPT_URL',
+                groupId: group.id,
+                expenseId: expense.id,
+                receiptUrl: data.receiptUrl,
+              });
+            }
+          }
+        } catch {
+          // Upload failure is non-blocking; expense is already saved
+        }
+      },
       setFlashMessage: (message) => dispatch({ type: 'SET_FLASH_MESSAGE', message }),
       clearFlashMessage: () => dispatch({ type: 'CLEAR_FLASH_MESSAGE' }),
       createGroup: async (name, memberNames) => {

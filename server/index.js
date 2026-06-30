@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const groupsRouter = require('./routes/groups');
 
 const app = express();
@@ -15,6 +16,9 @@ app.use((req, res, next) => {
   }
   return next();
 });
+
+// Serve uploaded receipt files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/groups', groupsRouter);

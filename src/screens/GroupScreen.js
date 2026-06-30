@@ -162,6 +162,12 @@ export default function GroupScreen() {
           </View>
           <Text style={styles.expenseMeta}>paid by {memberLookup[expense.paidBy]?.name || 'You'} · {expense.date}</Text>
           <Text style={styles.expenseSplit}>{getSplitLabel(expense, selectedGroup)}</Text>
+          {expense.receiptUrl ? (
+            <Pressable onPress={() => Linking.openURL(expense.receiptUrl)} style={styles.receiptRow}>
+              <Image source={{ uri: expense.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
+              <Text style={styles.receiptLabel}>📎 View receipt</Text>
+            </Pressable>
+          ) : null}
         </View>
       ))}
 
@@ -401,6 +407,24 @@ const styles = StyleSheet.create({
   expenseSplit: {
     color: colors.accent,
     fontWeight: '700',
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  receiptThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  receiptLabel: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '500',
   },
   settlementCard: {
     backgroundColor: colors.card,

@@ -1,7 +1,15 @@
 const { Router } = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const store = require('../store');
 
 const router = Router();
+
+const upload = multer({
+  dest: path.join(__dirname, '../uploads/'),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // POST /api/groups
 // Body: { name: string, members: [{id, name}] }
@@ -178,5 +186,60 @@ router.get('/:id/activity', (req, res) => {
 
   return res.status(200).json(events);
 });
+
+// POST /api/groups/:groupId/expenses/:expenseId/receipt
+// Multipart upload (field: receipt). x-user-id required.
+// Returns 200 { receiptUrl }; 400/404 on errors.
+router.post('/:groupId/expenses/:expenseId/receipt',
+  (req, res, next) => {
+    upload.single('receipt')(req, res, (err) => {
+      if (err && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large (max 5MB)' });
+      }
+      if (err) return next(err);
+      next();
+    });
+  },
+  (req, res) => {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: 'x-user-id header is required' });
+    }
+
+    const { groupId, expenseId } = req.params;
+    const group = store.getGroupById(groupId);
+    if (!group) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    const expense = group.expenses.find((e) => e.id === expenseId);
+    if (!expense) {
+      if (req.file) fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const mime = req.file.mimetype;
+    if (mime !== 'image/jpeg' && mime !== 'image/png') {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: 'Only JPEG and PNG images are accepted' });
+    }
+
+    const ext = mime === 'image/png' ? '.png' : '.jpg';
+    const newFilename = `${req.file.filename}${ext}`;
+    const newPath = path.join(path.dirname(req.file.path), newFilename);
+    fs.renameSync(req.file.path, newPath);
+
+    const receiptUrl = `/uploads/${newFilename}`;
+    store.setExpenseReceipt(expenseId, groupId, receiptUrl);
+
+    return res.status(200).json({ receiptUrl });
+  }
+);
 
 module.exports = router;
