@@ -11,12 +11,14 @@ const tokens = new Map();
  * @returns {{ id: string, name: string, members: Array, expenses: Array, createdAt: string }}
  */
 function createGroup(name, members) {
+  const now = new Date().toISOString();
   const group = {
     id: randomUUID(),
     name,
-    members: members || [],
+    members: (members || []).map((m) => ({ ...m, joinedAt: now })),
     expenses: [],
-    createdAt: new Date().toISOString(),
+    settlements: [],
+    createdAt: now,
   };
   groups.set(group.id, group);
   return group;
@@ -125,9 +127,77 @@ function addMemberToGroup(groupId, member) {
   if (!group) return undefined;
   const already = group.members.some((m) => m.id === member.id);
   if (!already) {
-    group.members.push(member);
+    group.members.push({ ...member, joinedAt: new Date().toISOString() });
   }
   return group;
+}
+
+/**
+ * Add a settlement to a group.
+ * @param {string} groupId
+ * @param {{ from: string, to: string, amount: number }} settlement
+ * @returns {object|undefined} saved settlement or undefined if group not found
+ */
+function addSettlement(groupId, { from, to, amount }) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+  const saved = {
+    id: randomUUID(),
+    groupId,
+    from,
+    to,
+    amount,
+    createdAt: new Date().toISOString(),
+  };
+  group.settlements.push(saved);
+  return saved;
+}
+
+/**
+ * Get a unified chronological activity feed for a group.
+ * Merges expenses, settlements, and member join events sorted by createdAt ascending.
+ * @param {string} groupId
+ * @returns {Array|undefined} sorted events or undefined if group not found
+ */
+function getActivity(groupId) {
+  const group = groups.get(groupId);
+  if (!group) return undefined;
+
+  const events = [];
+
+  for (const expense of group.expenses) {
+    events.push({
+      type: 'expense',
+      id: expense.id,
+      actor: expense.paid_by,
+      amount: expense.amount,
+      description: expense.description,
+      createdAt: expense.createdAt,
+    });
+  }
+
+  for (const settlement of (group.settlements || [])) {
+    events.push({
+      type: 'settlement',
+      id: settlement.id,
+      actor: settlement.from,
+      to: settlement.to,
+      amount: settlement.amount,
+      createdAt: settlement.createdAt,
+    });
+  }
+
+  for (const member of group.members) {
+    events.push({
+      type: 'member_joined',
+      actor: member.id,
+      name: member.name,
+      createdAt: member.joinedAt || group.createdAt,
+    });
+  }
+
+  events.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return events;
 }
 
 /**
@@ -136,6 +206,90 @@ function addMemberToGroup(groupId, member) {
 function reset() {
   groups.clear();
   tokens.clear();
+}
+
+/**
+ * Seed the store with demo groups matching the frontend seed data.
+ * Uses the same hardcoded IDs (g1, g2, g3) so the activity endpoint resolves correctly.
+ * Only seeds if the store is empty (idempotent on server restart).
+ */
+function seedDemoData() {
+  if (groups.size > 0) return;
+
+  const now = Date.now();
+  const ts = (daysAgo, hoursOffset = 0) =>
+    new Date(now - daysAgo * 86400000 - hoursOffset * 3600000).toISOString();
+
+  // Group g1 — Bali Trip
+  groups.set('g1', {
+    id: 'g1',
+    name: 'Bali Trip',
+    members: [
+      { id: 'm1', name: 'You', joinedAt: ts(10) },
+      { id: 'm2', name: 'Sarah', joinedAt: ts(10) },
+      { id: 'm3', name: 'Marcus', joinedAt: ts(10) },
+      { id: 'm4', name: 'Priya', joinedAt: ts(10) },
+    ],
+    expenses: [
+      { id: 'e1', groupId: 'g1', amount: 1240, description: 'Villa Airbnb (3 nights)', paid_by: 'm1', split_mode: 'equal', split_amounts: { m1: 310, m2: 310, m3: 310, m4: 310 }, createdAt: ts(3) },
+      { id: 'e2', groupId: 'g1', amount: 180, description: 'Scooter rentals', paid_by: 'm2', split_mode: 'equal', split_amounts: { m1: 60, m2: 60, m3: 60 }, createdAt: ts(2) },
+      { id: 'e3', groupId: 'g1', amount: 86, description: 'Warung dinner', paid_by: 'm3', split_mode: 'equal', split_amounts: { m1: 21.5, m2: 21.5, m3: 21.5, m4: 21.5 }, createdAt: ts(1) },
+      { id: 'e4', groupId: 'g1', amount: 320, description: 'Snorkelling tour', paid_by: 'm1', split_mode: 'equal', split_amounts: { m1: 80, m2: 80, m3: 80, m4: 80 }, createdAt: ts(0, 8) },
+      { id: 'e5', groupId: 'g1', amount: 45, description: 'Airport taxi', paid_by: 'm4', split_mode: 'equal', split_amounts: { m2: 15, m3: 15, m4: 15 }, createdAt: ts(0, 4) },
+    ],
+    settlements: [
+      { id: 's1', groupId: 'g1', from: 'm2', to: 'm1', amount: 310, createdAt: ts(0, 2) },
+    ],
+    createdAt: ts(10),
+  });
+
+  // Group g2 — Flat Share
+  groups.set('g2', {
+    id: 'g2',
+    name: 'Flat Share - June',
+    members: [
+      { id: 'm1', name: 'You', joinedAt: ts(14) },
+      { id: 'm5', name: 'James', joinedAt: ts(14) },
+      { id: 'm6', name: 'Lily', joinedAt: ts(14) },
+    ],
+    expenses: [
+      { id: 'e6', groupId: 'g2', amount: 210, description: 'Electricity bill', paid_by: 'm1', split_mode: 'equal', split_amounts: { m1: 70, m5: 70, m6: 70 }, createdAt: ts(7) },
+      { id: 'e7', groupId: 'g2', amount: 89, description: 'Internet', paid_by: 'm5', split_mode: 'equal', split_amounts: { m1: 44.5, m5: 44.5 }, createdAt: ts(7, 2) },
+      { id: 'e8', groupId: 'g2', amount: 47, description: 'Cleaning supplies', paid_by: 'm6', split_mode: 'equal', split_amounts: { m1: 23.5, m6: 23.5 }, createdAt: ts(3) },
+      { id: 'e9', groupId: 'g2', amount: 124, description: 'Shared groceries', paid_by: 'm1', split_mode: 'equal', split_amounts: { m1: 41.33, m5: 41.33, m6: 41.34 }, createdAt: ts(1) },
+    ],
+    settlements: [
+      { id: 's2', groupId: 'g2', from: 'm5', to: 'm1', amount: 70, createdAt: ts(0, 6) },
+    ],
+    createdAt: ts(14),
+  });
+
+  // Group g3 — Birthday Dinner
+  groups.set('g3', {
+    id: 'g3',
+    name: "Tom's Birthday Dinner",
+    members: [
+      { id: 'm1', name: 'You', joinedAt: ts(7) },
+      { id: 'm7', name: 'Tom', joinedAt: ts(7) },
+      { id: 'm8', name: 'Anna', joinedAt: ts(7) },
+      { id: 'm9', name: 'Chris', joinedAt: ts(7) },
+      { id: 'm10', name: 'Nina', joinedAt: ts(7) },
+    ],
+    expenses: [
+      { id: 'e10', groupId: 'g3', amount: 380, description: 'Restaurant bill', paid_by: 'm1', split_mode: 'equal', split_amounts: { m1: 76, m7: 76, m8: 76, m9: 76, m10: 76 }, createdAt: ts(7) },
+      { id: 'e11', groupId: 'g3', amount: 65, description: 'Birthday cake', paid_by: 'm8', split_mode: 'equal', split_amounts: { m8: 65 }, createdAt: ts(7, 1) },
+      { id: 'e12', groupId: 'g3', amount: 145, description: 'Wine & cocktails', paid_by: 'm9', split_mode: 'equal', split_amounts: { m9: 145 }, createdAt: ts(6, 20) },
+    ],
+    settlements: [
+      { id: 's3', groupId: 'g3', from: 'm7', to: 'm1', amount: 76, createdAt: ts(6) },
+    ],
+    createdAt: ts(7),
+  });
+}
+
+// Seed demo data on module load (skipped in test environments)
+if (process.env.NODE_ENV !== 'test') {
+  seedDemoData();
 }
 
 module.exports = {
@@ -147,5 +301,7 @@ module.exports = {
   addMemberToGroup,
   addExpense,
   getExpenses,
+  addSettlement,
+  getActivity,
   reset,
 };

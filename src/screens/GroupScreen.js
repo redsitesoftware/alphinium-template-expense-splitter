@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -30,6 +30,26 @@ export default function GroupScreen() {
   } = useSplitStore();
   const [inviteUrl, setInviteUrl] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [activityEvents, setActivityEvents] = useState([]);
+
+  const fetchActivity = useCallback(async () => {
+    if (!selectedGroup) return;
+    try {
+      const res = await fetch(`/api/groups/${selectedGroup.id}/activity`, {
+        headers: { 'x-user-id': 'me' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActivityEvents(Array.isArray(data) ? data : (data.events || []));
+      }
+    } catch {
+      // Activity feed is best-effort; silently ignore network errors
+    }
+  }, [selectedGroup?.id]);
+
+  useEffect(() => {
+    fetchActivity();
+  }, [fetchActivity]);
 
   if (!selectedGroup) {
     return null;
@@ -149,6 +169,34 @@ export default function GroupScreen() {
         <Pressable style={[styles.exportButton, styles.exportButtonPad]} onPress={handleExportCSV}>
           <Text style={styles.exportButtonText}>⬇ Export CSV</Text>
         </Pressable>
+      )}
+
+      {/* Activity Timeline */}
+      <Text style={styles.sectionTitle}>Activity</Text>
+      {activityEvents.length === 0 ? (
+        <Text style={styles.emptyText}>No activity yet</Text>
+      ) : (
+        activityEvents.map((event, index) => {
+          const actorName = memberLookup[event.actor]?.name || event.actor;
+          const toName = memberLookup[event.to]?.name || event.to;
+          let label = '';
+          if (event.type === 'expense') {
+            label = `${actorName} paid ${formatCurrency(event.amount)} for ${event.description}`;
+          } else if (event.type === 'settlement') {
+            label = `${actorName} paid ${toName} ${formatCurrency(event.amount)}`;
+          } else if (event.type === 'member_joined') {
+            label = `${event.name} joined the group`;
+          } else {
+            label = event.description || event.type;
+          }
+          const ts = event.createdAt ? new Date(event.createdAt).toLocaleString() : '';
+          return (
+            <View key={event.id || index} style={styles.activityRow}>
+              <Text style={styles.activityLabel}>{label}</Text>
+              {ts ? <Text style={styles.activityTime}>{ts}</Text> : null}
+            </View>
+          );
+        })
       )}
 
       <Text style={styles.sectionTitle}>Who owes who</Text>
@@ -401,6 +449,21 @@ const styles = StyleSheet.create({
   emptyText: {
     color: colors.textMuted,
     fontWeight: '600',
+  },
+  activityRow: {
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.xs,
+  },
+  activityLabel: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  activityTime: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   bottomButton: {
     marginTop: spacing.sm,
