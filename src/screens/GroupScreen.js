@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -40,6 +42,22 @@ export default function GroupScreen() {
       setInviteUrl(url);
     } finally {
       setInviteLoading(false);
+    }
+  }
+
+  function handleExportCSV() {
+    const exportUrl = `/api/groups/${selectedGroup.id}/export?format=csv`;
+    if (Platform.OS === 'web') {
+      const a = document.createElement('a');
+      a.href = exportUrl;
+      a.download = `${selectedGroup.name}-expenses.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      Linking.openURL(exportUrl).catch(() => {
+        Alert.alert('Export', `Copy this URL to download:\n${exportUrl}`);
+      });
     }
   }
 
@@ -126,6 +144,12 @@ export default function GroupScreen() {
           <Text style={styles.expenseSplit}>{getSplitLabel(expense, selectedGroup)}</Text>
         </View>
       ))}
+
+      {selectedGroup.expenses.length > 0 && (
+        <Pressable style={[styles.exportButton, styles.exportButtonPad]} onPress={handleExportCSV}>
+          <Text style={styles.exportButtonText}>⬇ Export CSV</Text>
+        </Pressable>
+      )}
 
       <Text style={styles.sectionTitle}>Who owes who</Text>
       {selectedGroup.summary.settlements.length ? (
@@ -412,5 +436,21 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
     fontSize: 14,
+  },
+  exportButton: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: radii.pill,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  exportButtonPad: {
+    marginHorizontal: spacing.lg,
+  },
+  exportButtonText: {
+    color: colors.accent,
+    fontWeight: '800',
+    fontSize: 15,
   },
 });
