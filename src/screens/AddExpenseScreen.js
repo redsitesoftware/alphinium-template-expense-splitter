@@ -85,7 +85,14 @@ export default function AddExpenseScreen() {
   async function handleSubmitExpense() {
     setUploading(true);
     try {
-      await addExpenseAndUploadReceipt(receiptUri);
+      const result = await addExpenseAndUploadReceipt(receiptUri);
+      if (receiptUri && result && !result.uploadSuccess) {
+        Alert.alert(
+          'Receipt not saved',
+          'Your expense was added, but the receipt photo could not be uploaded. You can try attaching it again later.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
       setUploading(false);
       setReceiptUri(null);

@@ -597,10 +597,10 @@ export function SplitProvider({ children }) {
       addExpenseAndUploadReceipt: async (receiptUri) => {
         // Build expense synchronously so we know its ID before dispatch
         const group = state.groups.find((item) => item.id === state.selectedGroup);
-        if (!group) return;
+        if (!group) return { uploadSuccess: true };
         const expense = createExpenseFromDraft(group, state.newExpense);
         dispatch({ type: 'ADD_EXPENSE' });
-        if (!receiptUri) return;
+        if (!receiptUri) return { uploadSuccess: true };
         try {
           const formData = new FormData();
           const filename = receiptUri.split('/').pop() || 'receipt.jpg';
@@ -625,9 +625,11 @@ export function SplitProvider({ children }) {
                 receiptUrl: data.receiptUrl,
               });
             }
+            return { uploadSuccess: true };
           }
+          return { uploadSuccess: false };
         } catch {
-          // Upload failure is non-blocking; expense is already saved
+          return { uploadSuccess: false };
         }
       },
       setFlashMessage: (message) => dispatch({ type: 'SET_FLASH_MESSAGE', message }),

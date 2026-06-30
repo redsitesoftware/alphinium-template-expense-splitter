@@ -6,8 +6,13 @@ const store = require('../store');
 
 const router = Router();
 
+const uploadsDir = path.join(__dirname, '../uploads/');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const upload = multer({
-  dest: path.join(__dirname, '../uploads/'),
+  dest: uploadsDir,
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 

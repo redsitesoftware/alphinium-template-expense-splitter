@@ -1,9 +1,16 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const groupsRouter = require('./routes/groups');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Ensure uploads directory exists (pod filesystem may not persist across restarts)
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Middleware
 app.use(express.json());
