@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { useSplitStore } from '../store/splitStore';
 import { colors, radii, spacing } from '../theme';
+
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'INR', 'MXN', 'THB'];
 
 function OptionPill({ active, label, onPress }) {
   return (
@@ -39,6 +42,7 @@ export default function AddExpenseScreen() {
 
   const [receiptUri, setReceiptUri] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   async function handleAttachReceipt() {
     Alert.alert('Attach Receipt', 'Choose an option', [
@@ -147,14 +151,41 @@ export default function AddExpenseScreen() {
           />
 
           <Text style={styles.fieldLabel}>Amount</Text>
-          <TextInput
-            value={draft.amount}
-            onChangeText={(value) => updateNewExpense({ amount: value.replace(/[^0-9.]/g, '') })}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            placeholderTextColor={colors.textMuted}
-            style={styles.amountInput}
-          />
+          <View style={styles.amountRow}>
+            <TextInput
+              value={draft.amount}
+              onChangeText={(value) => updateNewExpense({ amount: value.replace(/[^0-9.]/g, '') })}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.amountInput, styles.amountInputFlex]}
+            />
+            <Pressable style={styles.currencyButton} onPress={() => setShowCurrencyPicker(true)}>
+              <Text style={styles.currencyButtonText}>{draft.currency || 'USD'} ▾</Text>
+            </Pressable>
+          </View>
+
+          <Modal
+            visible={showCurrencyPicker}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowCurrencyPicker(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setShowCurrencyPicker(false)}>
+              <View style={styles.currencyModal}>
+                <Text style={styles.currencyModalTitle}>Select Currency</Text>
+                {CURRENCIES.map((code) => (
+                  <Pressable
+                    key={code}
+                    style={[styles.currencyOption, (draft.currency || 'USD') === code && styles.currencyOptionActive]}
+                    onPress={() => { updateNewExpense({ currency: code }); setShowCurrencyPicker(false); }}
+                  >
+                    <Text style={[(draft.currency || 'USD') === code ? styles.currencyOptionTextActive : styles.currencyOptionText]}>{code}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </Pressable>
+          </Modal>
 
           <Text style={styles.fieldLabel}>Paid by</Text>
           <View style={styles.pillWrap}>
@@ -265,6 +296,10 @@ export default function AddExpenseScreen() {
                 .map((memberId) => selectedGroup.members.find((member) => member.id === memberId)?.name)
                 .join(', ')}
             </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Currency</Text>
+            <Text style={styles.summaryValue}>{draft.currency || 'USD'}</Text>
           </View>
           <View style={styles.receiptSection}>
             <Pressable style={styles.attachButton} onPress={handleAttachReceipt}>
@@ -533,5 +568,68 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  amountInputFlex: {
+    flex: 1,
+  },
+  currencyButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    minWidth: 72,
+  },
+  currencyButtonText: {
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  currencyModal: {
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    width: 220,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  currencyModalTitle: {
+    color: colors.text,
+    fontWeight: '800',
+    fontSize: 16,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  currencyOption: {
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+  },
+  currencyOptionActive: {
+    backgroundColor: colors.primary,
+  },
+  currencyOptionText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  currencyOptionTextActive: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

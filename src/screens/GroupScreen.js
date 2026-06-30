@@ -115,7 +115,7 @@ export default function GroupScreen() {
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>Your balance</Text>
         <Text style={[styles.balanceValue, selectedGroup.summary.yourBalance >= 0 ? styles.positive : styles.negative]}>
-          {formatSignedCurrency(selectedGroup.summary.yourBalance)}
+          {formatSignedCurrency(selectedGroup.summary.yourBalance)} {selectedGroup.baseCurrency || 'USD'}
         </Text>
         <View style={styles.actionRow}>
           <Pressable style={styles.secondaryButton} onPress={() => openAddExpense(selectedGroup.id, selectedGroup.members.map((member) => member.id))}>
@@ -149,27 +149,39 @@ export default function GroupScreen() {
       ) : null}
 
       <Text style={styles.sectionTitle}>Expenses</Text>
-      {selectedGroup.expenses.map((expense) => (
-        <View key={expense.id} style={styles.expenseCard}>
-          <View style={styles.expenseTopRow}>
-            <View style={styles.expenseDescRow}>
-              {expense.category_id && categoryLookup[expense.category_id] ? (
-                <Text style={styles.categoryEmoji}>{categoryLookup[expense.category_id].emoji}</Text>
-              ) : null}
-              <Text style={styles.expenseDesc}>{expense.desc}</Text>
+      {selectedGroup.expenses.map((expense) => {
+        const baseCurrency = selectedGroup.baseCurrency || 'USD';
+        const expCurrency = expense.currency || baseCurrency;
+        const showOriginal = expCurrency !== baseCurrency && expense.originalAmount != null;
+        return (
+          <View key={expense.id} style={styles.expenseCard}>
+            <View style={styles.expenseTopRow}>
+              <View style={styles.expenseDescRow}>
+                {expense.category_id && categoryLookup[expense.category_id] ? (
+                  <Text style={styles.categoryEmoji}>{categoryLookup[expense.category_id].emoji}</Text>
+                ) : null}
+                <Text style={styles.expenseDesc}>{expense.desc}</Text>
+              </View>
+              <View style={styles.expenseAmountCol}>
+                <Text style={styles.expenseAmount}>
+                  {formatCurrency(expense.amount)} {baseCurrency}
+                </Text>
+                {showOriginal ? (
+                  <Text style={styles.expenseOriginal}>({expCurrency} {Number(expense.originalAmount).toFixed(2)})</Text>
+                ) : null}
+              </View>
             </View>
-            <Text style={styles.expenseAmount}>{formatCurrency(expense.amount)}</Text>
+            <Text style={styles.expenseMeta}>paid by {memberLookup[expense.paidBy]?.name || 'You'} · {expense.date}</Text>
+            <Text style={styles.expenseSplit}>{getSplitLabel(expense, selectedGroup)}</Text>
+            {expense.receiptUrl ? (
+              <Pressable onPress={() => Linking.openURL(expense.receiptUrl)} style={styles.receiptRow}>
+                <Image source={{ uri: expense.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
+                <Text style={styles.receiptLabel}>📎 View receipt</Text>
+              </Pressable>
+            ) : null}
           </View>
-          <Text style={styles.expenseMeta}>paid by {memberLookup[expense.paidBy]?.name || 'You'} · {expense.date}</Text>
-          <Text style={styles.expenseSplit}>{getSplitLabel(expense, selectedGroup)}</Text>
-          {expense.receiptUrl ? (
-            <Pressable onPress={() => Linking.openURL(expense.receiptUrl)} style={styles.receiptRow}>
-              <Image source={{ uri: expense.receiptUrl }} style={styles.receiptThumb} resizeMode="cover" />
-              <Text style={styles.receiptLabel}>📎 View receipt</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ))}
+        );
+      })}
 
       {selectedGroup.expenses.length > 0 && (
         <Pressable style={[styles.exportButton, styles.exportButtonPad]} onPress={handleExportCSV}>
@@ -210,11 +222,13 @@ export default function GroupScreen() {
         selectedGroup.summary.settlements.map((settlement, index) => {
           const from = memberLookup[settlement.from];
           const to = memberLookup[settlement.to];
+          const baseCurrency = selectedGroup.baseCurrency || 'USD';
+          const amountStr = `${formatCurrency(settlement.amount)} ${baseCurrency}`;
           const sentence = settlement.to === 'm1'
-            ? `${from?.name} owes you ${formatCurrency(settlement.amount)}`
+            ? `${from?.name} owes you ${amountStr}`
             : settlement.from === 'm1'
-              ? `You owe ${to?.name} ${formatCurrency(settlement.amount)}`
-              : `${from?.name} owes ${to?.name} ${formatCurrency(settlement.amount)}`;
+              ? `You owe ${to?.name} ${amountStr}`
+              : `${from?.name} owes ${to?.name} ${amountStr}`;
 
           return (
             <View key={`${settlement.from}-${settlement.to}-${index}`} style={styles.settlementCard}>
@@ -400,6 +414,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '800',
     fontSize: 18,
+    textAlign: 'right',
+  },
+  expenseAmountCol: {
+    alignItems: 'flex-end',
+  },
+  expenseOriginal: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   expenseMeta: {
     color: colors.textMuted,
