@@ -291,6 +291,12 @@ function calculateGroupBalances(group) {
     });
   });
 
+  // Deduct recorded settlements: payer's debt decreases, payee's credit decreases
+  (group.settlements || []).forEach((settlement) => {
+    net[settlement.from] = roundCurrency((net[settlement.from] || 0) + Number(settlement.amount || 0));
+    net[settlement.to]   = roundCurrency((net[settlement.to]   || 0) - Number(settlement.amount || 0));
+  });
+
   const creditors = Object.entries(net)
     .filter(([, amount]) => amount > 0.009)
     .map(([memberId, amount]) => ({ memberId, amount: roundCurrency(amount) }))

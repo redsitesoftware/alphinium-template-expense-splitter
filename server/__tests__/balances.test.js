@@ -47,14 +47,26 @@ describe('GET /api/groups/:id/balances', () => {
     expect(res.body.net.u3).toBeCloseTo(-30, 1);
   });
 
-  it('settle-up list minimises transactions', async () => {
+  it('deducts recorded settlements from net balances', async () => {
+    // u1 pays $90 split equally → u2 and u3 each owe u1 $30
     await request(app).post(`/api/groups/${groupId}/expenses`).set(headers)
-      .send({ amount: 90, description: 'Hotel', paid_by: 'u1', split_mode: 'equal' });
+      .send({ amount: 90, description: 'Dinner', paid_by: 'u1', split_mode: 'equal' });
+
+    // u2 settles their full debt of $30
+    await request(app).post(`/api/groups/${groupId}/settlements`).set(headers)
+      .send({ from: 'u2', to: 'u1', amount: 30 });
 
     const res = await request(app).get(`/api/groups/${groupId}/balances`).set(headers);
-    // u2 and u3 each owe u1 $30 → 2 settlements
-    expect(res.body.settlements).toHaveLength(2);
-    expect(res.body.settlements.every((s) => s.to === 'u1')).toBe(true);
-    expect(res.body.settlements.every((s) => s.amount === 30)).toBe(true);
+    expect(res.status).toBe(200);
+    // u2 fully settled — net should be 0
+    expect(res.body.net.u2).toBeCloseTo(0, 1);
+    // u1 credit reduced by 30
+    expect(res.body.net.u1).toBeCloseTo(30, 1);
+    // u3 unchanged
+    expect(res.body.net.u3).toBeCloseTo(-30, 1);
+    // only 1 remaining settlement (u3 → u1)
+    expect(res.body.settlements).toHaveLength(1);
+    expect(res.body.settlements[0].from).toBe('u3');
+    expect(res.body.settlements[0].to).toBe('u1');
   });
 });
